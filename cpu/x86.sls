@@ -1076,7 +1076,7 @@
        (cgl-register-update location eos expr))
       (else
        (assert (eq? store 'mem))
-       `((_ (RAM ,location ,eos ,expr))))))
+       `((_ (begin (RAM ,location ,eos ,expr) #f))))))
 
   ;; Generate lhs and rhs for a let* that updates a register.
   (define (cgl-register-update regno eos expr)
@@ -1142,8 +1142,8 @@
          (assert (not (eqv? SP 1))) ; TODO: cg-int-stack (it needs
                                     ; merge, start-ip, return)
          (let* ((value ,(cg-trunc expr eos))
-                ,@(cgl-register-update idx-SP eos (cg- 'SP n))
-                (_ (RAM ,(cg+ 'ss (cg-trunc 'SP eos)) ,eos value)))
+                ,@(cgl-register-update idx-SP eos (cg- 'SP n)))
+           (RAM ,(cg+ 'ss (cg-trunc 'SP eos)) ,eos value)
            ,k))))
 
   (define (cg-push* eos x . x*)
@@ -1912,7 +1912,7 @@
        ,(%cg-rep repeat eos eas k-restart k-continue
                  `(let* ((dst-addr ,(cg+ 'es (cg-register-ref idx-DI eas)))
                          ,@(cgl-register-update idx-DI eas (cg+ 'DI 'n)))
-                    (RAM dst-addr ,eos (I/O src-port ,eos))
+                    (RAM dst-addr ,eos (port-read src-port ,eos))
                     (if (not (eqv? count 0))
                         (lp-rep DI SI count iterations)
                         (let* (,@(if repeat (cgl-register-update idx-CX eas 'count) '()))
@@ -1926,7 +1926,7 @@
        ,(%cg-rep repeat eos eas k-restart k-continue
                  `(let* ((src-addr ,(cg+ dseg (cg-register-ref idx-SI eas)))
                          ,@(cgl-register-update idx-SI eas (cg+ 'SI 'n)))
-                    (I/O dst-port ,eos (RAM src-addr ,eos))
+                    (port-write dst-port ,eos (RAM src-addr ,eos))
                     (if (not (eqv? count 0))
                         (lp-rep DI SI count iterations)
                         (let* (,@(if repeat (cgl-register-update idx-CX eas 'count) '()))
@@ -2091,26 +2091,22 @@
     ;; Wrap the flags register and the arithmetic flags.
     `(lambda (abort fl fl-undef AX CX DX BX SP BP SI DI
                     cs ds ss es fs gs)
-       ;; Accessors for RAM and I/O ports. The case-lambda and the
-       ;; case will be optimized away by cp0.
+       ;; Access to RAM. The case-lambda and the case will be
+       ;; optimized away by cp0.
        (define RAM
          (case-lambda
            ((addr size)
             (case size
               ((8) (memory-u8-ref addr))
               ((16) (memory-u16-ref addr))
-              ((32) (memory-u32-ref addr))))
+              ((32) (memory-u32-ref addr))
+              (else (error 'RAM "Bad size" addr size))))
            ((addr size value)
             (case size
               ((8) (memory-u8-set! addr value))
               ((16) (memory-u16-set! addr value))
-              ((32) (memory-u32-set! addr value))))))
-       (define I/O
-         (case-lambda
-           ((addr size)
-            (port-read addr size))
-           ((addr size value)
-            (port-write addr size value))))
+              ((32) (memory-u32-set! addr value))
+              (else (error 'RAM "Bad size" addr size value))))))
        ;; Individual flags are wrapped in lambdas. All these lambdas
        ;; will be optimized away, but most will not even have their
        ;; bodies evaluated (e.g. when an ADD is followed by another
@@ -2141,7 +2137,7 @@
        (values ,ip (fl) (fl-undef) AX CX DX BX SP BP SI DI
                cs ds ss es fs gs)))
 
-  ;; Returns to to machine-run from anywhere in the instruction.
+  ;; Returns to machine-run from anywhere in the instruction.
   (define (abort merge ip abort-cause)
     `(let* (,@(cgl-merge-fl merge))
        (abort ,ip (fl) (fl-undef) AX CX DX BX SP BP SI DI
@@ -3053,14 +3049,14 @@
              ((#xE4 #xE5)               ; in *AL Ib, in *eAX Ib
               (let ((eos (if (eqv? op #xE4) 8 eos)))
                 (with-instruction-u8* ((imm <- cs ip))
-                  (emit `(let* ((tmp (I/O ,imm ,eos))
+                  (emit `(let* ((tmp (port-read ,imm ,eos))
                                 ,@(cgl-register-update idx-AX eos 'tmp))
                            ,(continue merge ip))))))
              ((#xE6 #xE7)               ; out Ib *AL, out Ib *eAX
               (let ((eos (if (eqv? op #xE6) 8 eos)))
                 (with-instruction-u8* ((imm <- cs ip))
                   (emit `(let ()
-                           (I/O ,imm ,eos ,(cg-register-ref idx-AX eos))
+                           (port-write ,imm ,eos ,(cg-register-ref idx-AX eos))
                            ,(continue merge ip))))))
              ((#xE8)                    ; call Jz
               (with-instruction-immediate-sx* ((disp <- cs ip eos))
@@ -3081,14 +3077,14 @@
              ((#xEC #xED)               ; in *AL *DX, in *eAX *DX
               (let ((eos (if (eqv? op #xEC) 8 eos)))
                 (emit `(let* ((port ,(cg-register-ref idx-DX 16))
-                              (value (I/O port ,eos))
+                              (value (port-read port ,eos))
                               ,@(cgl-register-update idx-AX eos 'value))
                          ,(continue merge ip)))))
              ((#xEE #xEF)               ; out *DX *AL, out *DX *eAX
               (let ((eos (if (eqv? op #xEE) 8 eos)))
                 (emit `(let ((port ,(cg-register-ref idx-DX 16))
                              (value ,(cg-register-ref idx-AX eos)))
-                         (I/O port ,eos value)
+                         (port-write port ,eos value)
                          ,(continue merge ip)))))
              ((#xF1)                    ; icebp / int1
               (emit (cg-int-software-interrupt 1 return merge ip)))
@@ -3383,9 +3379,14 @@
                   ;; enable-interrupt-hooks. TODO: It would be better
                   ;; to not hardcode this.
                   (let* ((int-vector ip^)
-                         (result (call-interrupt-handler int-vector)))
-                    (when debug
-                      (print "INT #x" (hex int-vector) " AX=#x" (hex AX^)))
+                         (result (call-with-values
+                                   (lambda ()
+                                     (when debug
+                                       (print "INT #x" (hex int-vector) " AX=#x" (hex AX^)))
+                                     (call-interrupt-handler int-vector))
+                                   (case-lambda
+                                     ((result) result)
+                                     (() #f)))))
                     (cond ((memq result '(stop reboot))
                            result)
                           (else

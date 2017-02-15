@@ -1,6 +1,6 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
 ;; PC emulator in Scheme
-;; Copyright © 2016 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2016, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -647,7 +647,7 @@
               (lambda (c)
                 (let ((code (cond ((eof-object? c) (fxand (char->integer #\Z) 31)) ;Ctrl-Z
                                   ((char=? c #\linefeed) (char->integer #\return))
-                                  ((hashtable-ref inverse-cp437 c (char->integer c))))))
+                                  (else (hashtable-ref inverse-cp437 c (char->integer c))))))
                   ;; TODO: This should really also be converting to scancodes.
                   (machine-AX-set! M (fxior (fxand (machine-AX M) (fxnot #xffff))
                                             (fx* #x0101 (fxand code #xff))))))))
