@@ -11,7 +11,7 @@ programs/zabavno --help
 programs/zabavno-dos
 
 # Run a simple DOS program.
-tests/x86/hello-dos.sps
+tests/hello-dos.sps
 programs/zabavno-dos hello.com
 
 # The instruction tester.

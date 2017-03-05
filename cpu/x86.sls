@@ -2248,7 +2248,7 @@
                                          (machine-IDTR-limit-set! M limit))))
                                   ,(continue merge ip)))
                               (emit (cg-int-invalid-opcode return merge cs start-ip))))
-                         ;; TODO: If PE is implemented: SGDT, SIDT, LGDT, LIDT.
+                         ;; TODO: If PE is implemented: SGDT, SIDT.
                          (else
                           (emit (cg-int-invalid-opcode return merge cs start-ip)))))))
                   ;; TODO: If PE is implemented: #x02 lar, #x03 lsl
