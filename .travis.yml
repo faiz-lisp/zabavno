@@ -8,28 +8,25 @@ env:
     - SCHEME="Racket_HEAD"
     - SCHEME="SagittariusScheme"
     - SCHEME="VicareScheme"
+    - SCHEME="Ypsilon"
 
 matrix:
   allow_failures:
     - env: SCHEME="Larceny"
-  fast_finish: true
+    - env: SCHEME="Ypsilon"
+
+sudo: false
+dist: trusty
 
 addons:
   apt:
     packages:
-      # For Vicare
-      - libgmp-dev
-      # Sagittarius
-      - libgc-dev
-      - zlib1g-dev
-      - libffi-dev
-      # For Larceny
+      # Larceny
       - libc6:i386
+      # Sagittarius and GNU Guile
+      - libgc-dev
       # GNU Guile
       - libunistring-dev
-      - gcc-4.8
-    sources:
-      - ubuntu-toolchain-r-test
 
 language: c
 
@@ -45,15 +42,16 @@ compiler:
   - gcc
 
 before_script:
-  # Install machine-code
-  - wget https://github.com/weinholt/machine-code/archive/master.zip -O machine-code-master.zip
-  - unzip machine-code-master.zip
-  - mkdir -p external && mv machine-code-master external/machine-code
-  - export SCHEME_LIBRARY_PATH=$PWD/external
+  # Install Akku.scm and dependencies
+  - gpg --keyserver pool.sks-keyservers.net --recv-keys 08272FBB54EEB5072D5BA930E33E61A2E9B8C3A2
+  - curl -A "$TRAVIS_REPO_SLUG" -LO "https://akku.weinholt.se/get-akku.sh{,.sig}"
+  - gpg --verify get-akku.sh.sig get-akku.sh && bash get-akku.sh
+  - ~/bin/akku install
+  - export SCHEME_LIBRARY_PATH=$PWD/.akku/lib
   # Install scheme-ci
   - wget https://github.com/weinholt/scheme-ci/archive/master.zip -O scheme-ci-master.zip
   - unzip scheme-ci-master.zip
-  - eval "$(CC=gcc-4.8 INSTALL_TARGET=$HOME/opt scheme-ci-master/install-scheme.sh $SCHEME)"
+  - eval "$(INSTALL_TARGET=$HOME/opt scheme-ci-master/install-scheme.sh $SCHEME)"
 
 script:
   - ./run-tests.sh

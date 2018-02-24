@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2014, 2016, 2017 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2014, 2016, 2017, 2018 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -150,7 +150,7 @@
                            (guard (exn (else #f))
                              (eval name (environment lib))))))
       (or (try-import 'expand/optimize '(ikarus))
-          (try-import 'expand/optimize '(scheme))
+          (try-import 'expand/optimize '(chezscheme))
           (try-import 'expand/optimize '(mancer))
           (lambda (x) x))))
 

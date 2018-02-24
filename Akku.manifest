@@ -1,0 +1,8 @@
+#!r6rs ; -*- mode: scheme; coding: utf-8 -*-
+(import (akku format manifest))
+
+(akku-package ("zabavno" "0.1.1-alpha.0")
+  (synopsis "80386 real-mode CPU and PC emulator")
+  (authors "Göran Weinholt <goran@weinholt.se>")
+  (license "MIT")
+  (depends ("machine-code" "^2.0.0")))
